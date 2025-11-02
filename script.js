@@ -4,6 +4,9 @@ const userInput = document.getElementById("userInput");
 const chatWindow = document.getElementById("chatWindow");
 const sendBtn = document.getElementById("sendBtn");
 
+/* Cloudflare Worker URL with your Store ID */
+const CLOUDFLARE_WORKER_URL = "https://openai.chesslablab.workers.dev/63ee090176b64641b6165540574db140";
+
 /* Conversation history */
 let conversationHistory = [];
 
@@ -29,10 +32,7 @@ Remember: You represent a premium beauty brand. Be helpful, confident, and focus
 
 /* Initialize chat with welcome message */
 function initializeChat() {
-  addMessage(
-    "ai",
-    "👋 Welcome to L'Oréal Beauty Advisor! I'm here to help you find the perfect products and beauty routines tailored just for you.\n\nWhat can I help you with today? Skincare, haircare, makeup, or something else?"
-  );
+  addMessage("ai", "👋 Welcome to L'Oréal Beauty Advisor! I'm here to help you find the perfect products and beauty routines tailored just for you.\n\nWhat can I help you with today? Skincare, haircare, makeup, or something else?");
 }
 
 /* Add message to chat window */
@@ -41,7 +41,7 @@ function addMessage(sender, text) {
   msgDiv.classList.add("msg", sender);
   msgDiv.textContent = text;
   chatWindow.appendChild(msgDiv);
-
+  
   // Scroll to bottom
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
@@ -77,43 +77,37 @@ function setInputState(disabled) {
   }
 }
 
-/* Call OpenAI API */
-async function callOpenAI(userMessage) {
-  // Check if API key exists
-  if (typeof OPENAI_API_KEY === "undefined" || !OPENAI_API_KEY) {
-    throw new Error("OpenAI API key not found. Please add it to secrets.js");
-  }
-
+/* Call Cloudflare Worker (which proxies to OpenAI) */
+async function callCloudflareWorker(userMessage) {
   // Add user message to conversation history
   conversationHistory.push({
     role: "user",
-    content: userMessage,
+    content: userMessage
   });
 
   // Prepare messages array with system prompt
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
-    ...conversationHistory,
+    ...conversationHistory
   ];
 
-  // Call OpenAI API
-  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+  // Call Cloudflare Worker instead of OpenAI directly
+  const response = await fetch(CLOUDFLARE_WORKER_URL, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${OPENAI_API_KEY}`,
+      "Content-Type": "application/json"
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini", // Using GPT-4o-mini for cost efficiency
+      model: "gpt-4o-mini",
       messages: messages,
       temperature: 0.7,
-      max_tokens: 500,
-    }),
+      max_tokens: 500
+    })
   });
 
   if (!response.ok) {
     const errorData = await response.json();
-    throw new Error(errorData.error?.message || "API request failed");
+    throw new Error(errorData.error?.message || "Worker request failed");
   }
 
   const data = await response.json();
@@ -122,7 +116,7 @@ async function callOpenAI(userMessage) {
   // Add assistant response to conversation history
   conversationHistory.push({
     role: "assistant",
-    content: assistantMessage,
+    content: assistantMessage
   });
 
   return assistantMessage;
@@ -137,32 +131,30 @@ chatForm.addEventListener("submit", async (e) => {
 
   // Display user message
   addMessage("user", message);
-
+  
   // Clear input
   userInput.value = "";
-
+  
   // Disable input while processing
   setInputState(true);
-
+  
   // Show typing indicator
   showTypingIndicator();
 
   try {
-    // Call OpenAI API
-    const response = await callOpenAI(message);
-
+    // Call Cloudflare Worker
+    const response = await callCloudflareWorker(message);
+    
     // Remove typing indicator
     removeTypingIndicator();
-
+    
     // Display AI response
     addMessage("ai", response);
+    
   } catch (error) {
     console.error("Error:", error);
     removeTypingIndicator();
-    addMessage(
-      "ai",
-      "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸"
-    );
+    addMessage("ai", "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸");
   } finally {
     // Re-enable input
     setInputState(false);
@@ -172,4 +164,3 @@ chatForm.addEventListener("submit", async (e) => {
 
 /* Initialize on page load */
 initializeChat();
- 
