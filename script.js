@@ -172,3 +172,4 @@ chatForm.addEventListener("submit", async (e) => {
 
 /* Initialize on page load */
 initializeChat();
+ 
