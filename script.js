@@ -2,17 +2,173 @@
 const chatForm = document.getElementById("chatForm");
 const userInput = document.getElementById("userInput");
 const chatWindow = document.getElementById("chatWindow");
+const sendBtn = document.getElementById("sendBtn");
 
-// Set initial message
-chatWindow.textContent = "👋 Hello! How can I help you today?";
+/* Conversation history */
+let conversationHistory = [];
+
+/* L'Oréal System Prompt */
+const SYSTEM_PROMPT = `You are a knowledgeable and friendly L'Oréal Beauty Advisor AI assistant. Your role is to help customers with:
+
+1. L'Oréal product recommendations (skincare, haircare, makeup, fragrances)
+2. Beauty routines and tips specific to L'Oréal products
+3. Product information, ingredients, and benefits
+4. Skin type and hair type consultations
+5. How to use L'Oréal products effectively
+
+Guidelines:
+- Only discuss L'Oréal products and beauty topics related to L'Oréal
+- Be warm, professional, and encouraging
+- If asked about competitor brands, politely redirect to L'Oréal alternatives
+- If asked about topics unrelated to beauty or L'Oréal, politely explain you can only help with L'Oréal beauty questions
+- Provide specific product names when possible
+- Ask clarifying questions to give better recommendations
+- Emphasize L'Oréal's tagline spirit: "Because You're Worth It"
+
+Remember: You represent a premium beauty brand. Be helpful, confident, and focused on making customers feel valued.`;
+
+/* Initialize chat with welcome message */
+function initializeChat() {
+  addMessage(
+    "ai",
+    "👋 Welcome to L'Oréal Beauty Advisor! I'm here to help you find the perfect products and beauty routines tailored just for you.\n\nWhat can I help you with today? Skincare, haircare, makeup, or something else?"
+  );
+}
+
+/* Add message to chat window */
+function addMessage(sender, text) {
+  const msgDiv = document.createElement("div");
+  msgDiv.classList.add("msg", sender);
+  msgDiv.textContent = text;
+  chatWindow.appendChild(msgDiv);
+
+  // Scroll to bottom
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+/* Show typing indicator */
+function showTypingIndicator() {
+  const typingDiv = document.createElement("div");
+  typingDiv.classList.add("msg", "ai", "typing-indicator");
+  typingDiv.id = "typingIndicator";
+  typingDiv.textContent = "Thinking...";
+  chatWindow.appendChild(typingDiv);
+  chatWindow.scrollTop = chatWindow.scrollHeight;
+}
+
+/* Remove typing indicator */
+function removeTypingIndicator() {
+  const indicator = document.getElementById("typingIndicator");
+  if (indicator) {
+    indicator.remove();
+  }
+}
+
+/* Disable/enable input */
+function setInputState(disabled) {
+  userInput.disabled = disabled;
+  sendBtn.disabled = disabled;
+  if (disabled) {
+    sendBtn.style.opacity = "0.6";
+    sendBtn.style.cursor = "not-allowed";
+  } else {
+    sendBtn.style.opacity = "1";
+    sendBtn.style.cursor = "pointer";
+  }
+}
+
+/* Call OpenAI API */
+async function callOpenAI(userMessage) {
+  // Check if API key exists
+  if (typeof OPENAI_API_KEY === "undefined" || !OPENAI_API_KEY) {
+    throw new Error("OpenAI API key not found. Please add it to secrets.js");
+  }
+
+  // Add user message to conversation history
+  conversationHistory.push({
+    role: "user",
+    content: userMessage,
+  });
+
+  // Prepare messages array with system prompt
+  const messages = [
+    { role: "system", content: SYSTEM_PROMPT },
+    ...conversationHistory,
+  ];
+
+  // Call OpenAI API
+  const response = await fetch("https://api.openai.com/v1/chat/completions", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: `Bearer ${OPENAI_API_KEY}`,
+    },
+    body: JSON.stringify({
+      model: "gpt-4o-mini", // Using GPT-4o-mini for cost efficiency
+      messages: messages,
+      temperature: 0.7,
+      max_tokens: 500,
+    }),
+  });
+
+  if (!response.ok) {
+    const errorData = await response.json();
+    throw new Error(errorData.error?.message || "API request failed");
+  }
+
+  const data = await response.json();
+  const assistantMessage = data.choices[0].message.content;
+
+  // Add assistant response to conversation history
+  conversationHistory.push({
+    role: "assistant",
+    content: assistantMessage,
+  });
+
+  return assistantMessage;
+}
 
 /* Handle form submit */
-chatForm.addEventListener("submit", (e) => {
+chatForm.addEventListener("submit", async (e) => {
   e.preventDefault();
 
-  // When using Cloudflare, you'll need to POST a `messages` array in the body,
-  // and handle the response using: data.choices[0].message.content
+  const message = userInput.value.trim();
+  if (!message) return;
 
-  // Show message
-  chatWindow.innerHTML = "Connect to the OpenAI API for a response!";
+  // Display user message
+  addMessage("user", message);
+
+  // Clear input
+  userInput.value = "";
+
+  // Disable input while processing
+  setInputState(true);
+
+  // Show typing indicator
+  showTypingIndicator();
+
+  try {
+    // Call OpenAI API
+    const response = await callOpenAI(message);
+
+    // Remove typing indicator
+    removeTypingIndicator();
+
+    // Display AI response
+    addMessage("ai", response);
+  } catch (error) {
+    console.error("Error:", error);
+    removeTypingIndicator();
+    addMessage(
+      "ai",
+      "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸"
+    );
+  } finally {
+    // Re-enable input
+    setInputState(false);
+    userInput.focus();
+  }
 });
+
+/* Initialize on page load */
+initializeChat();
