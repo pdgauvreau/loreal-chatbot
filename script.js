@@ -5,8 +5,7 @@ const chatWindow = document.getElementById("chatWindow");
 const sendBtn = document.getElementById("sendBtn");
 
 /* Cloudflare Worker URL with your Store ID */
-const CLOUDFLARE_WORKER_URL =
-  "https://wonderbot-worker.pdgauvreau.workers.dev/";
+const CLOUDFLARE_WORKER_URL = "https://lorealworker.pdgauvreau.workers.dev/";
 
 /* Conversation history */
 let conversationHistory = [];
@@ -102,19 +101,32 @@ async function callCloudflareWorker(userMessage) {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o-mini",
+      model: "gpt-4o", // Changed to match Worker
       messages: messages,
       temperature: 0.7,
-      max_tokens: 500,
+      max_tokens: 300, // Changed to match Worker's max_completion_tokens
     }),
   });
 
   if (!response.ok) {
-    const errorData = await response.json();
-    throw new Error(errorData.error?.message || "Worker request failed");
+    let errorMessage = "Worker request failed";
+    try {
+      const errorData = await response.json();
+      errorMessage = errorData.error?.message || errorMessage;
+    } catch (e) {
+      // If response isn't JSON, use status text
+      errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    }
+    throw new Error(errorMessage);
   }
 
   const data = await response.json();
+
+  // Add safety check for response structure
+  if (!data.choices || !data.choices[0] || !data.choices[0].message) {
+    throw new Error("Invalid response format from API");
+  }
+
   const assistantMessage = data.choices[0].message.content;
 
   // Add assistant response to conversation history
@@ -125,48 +137,6 @@ async function callCloudflareWorker(userMessage) {
 
   return assistantMessage;
 }
-
-/* Handle form submit */
-chatForm.addEventListener("submit", async (e) => {
-  e.preventDefault();
-
-  const message = userInput.value.trim();
-  if (!message) return;
-
-  // Display user message
-  addMessage("user", message);
-
-  // Clear input
-  userInput.value = "";
-
-  // Disable input while processing
-  setInputState(true);
-
-  // Show typing indicator
-  showTypingIndicator();
-
-  try {
-    // Call Cloudflare Worker
-    const response = await callCloudflareWorker(message);
-
-    // Remove typing indicator
-    removeTypingIndicator();
-
-    // Display AI response
-    addMessage("ai", response);
-  } catch (error) {
-    console.error("Error:", error);
-    removeTypingIndicator();
-    addMessage(
-      "ai",
-      "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸"
-    );
-  } finally {
-    // Re-enable input
-    setInputState(false);
-    userInput.focus();
-  }
-});
 
 /* Initialize on page load */
 initializeChat();
