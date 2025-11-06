@@ -6,7 +6,7 @@ let sendBtn;
 
 /* Cloudflare Worker URL */
 const CLOUDFLARE_WORKER_URL =
-  "https://lorealworker.pdgauvreau.workers.dev/";
+  "https://wonderbot-worker.pdgauvreau.workers.dev/";
 
 /* Conversation history */
 let conversationHistory = [];
@@ -123,6 +123,46 @@ async function callCloudflareWorker(userMessage) {
   return assistantMessage;
 }
 
+/* Handle sending message */
+async function handleSendMessage() {
+  const message = userInput.value.trim();
+  if (!message) return;
+
+  // Display user message
+  addMessage("user", message);
+
+  // Clear input
+  userInput.value = "";
+
+  // Disable input while processing
+  setInputState(true);
+
+  // Show typing indicator
+  showTypingIndicator();
+
+  try {
+    // Call Cloudflare Worker
+    const response = await callCloudflareWorker(message);
+
+    // Remove typing indicator
+    removeTypingIndicator();
+
+    // Display AI response
+    addMessage("ai", response);
+  } catch (error) {
+    console.error("Error:", error);
+    removeTypingIndicator();
+    addMessage(
+      "ai",
+      "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸"
+    );
+  } finally {
+    // Re-enable input
+    setInputState(false);
+    userInput.focus();
+  }
+}
+
 /* Initialize chat with welcome message */
 function initializeChat() {
   addMessage(
@@ -142,45 +182,25 @@ document.addEventListener("DOMContentLoaded", function () {
   // Initialize chat
   initializeChat();
 
-  // Handle form submit
-  chatForm.addEventListener("submit", async (e) => {
+  // Prevent form submission completely
+  chatForm.addEventListener("submit", function (e) {
     e.preventDefault();
+    e.stopPropagation();
+    return false;
+  });
 
-    const message = userInput.value.trim();
-    if (!message) return;
+  // Handle button click
+  sendBtn.addEventListener("click", function (e) {
+    e.preventDefault();
+    e.stopPropagation();
+    handleSendMessage();
+  });
 
-    // Display user message
-    addMessage("user", message);
-
-    // Clear input
-    userInput.value = "";
-
-    // Disable input while processing
-    setInputState(true);
-
-    // Show typing indicator
-    showTypingIndicator();
-
-    try {
-      // Call Cloudflare Worker
-      const response = await callCloudflareWorker(message);
-
-      // Remove typing indicator
-      removeTypingIndicator();
-
-      // Display AI response
-      addMessage("ai", response);
-    } catch (error) {
-      console.error("Error:", error);
-      removeTypingIndicator();
-      addMessage(
-        "ai",
-        "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸"
-      );
-    } finally {
-      // Re-enable input
-      setInputState(false);
-      userInput.focus();
+  // Handle Enter key in input
+  userInput.addEventListener("keypress", function (e) {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      handleSendMessage();
     }
   });
 });
