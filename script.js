@@ -1,11 +1,12 @@
-/* DOM elements */
-const chatForm = document.getElementById("chatForm");
-const userInput = document.getElementById("userInput");
-const chatWindow = document.getElementById("chatWindow");
-const sendBtn = document.getElementById("sendBtn");
+/* DOM elements - will be initialized after DOM loads */
+let chatForm;
+let userInput;
+let chatWindow;
+let sendBtn;
 
-/* Cloudflare Worker URL with your Store ID */
-const CLOUDFLARE_WORKER_URL = "https://lorealworker.pdgauvreau.workers.dev/";
+/* Cloudflare Worker URL */
+const CLOUDFLARE_WORKER_URL =
+  "https://lorealworker.pdgauvreau.workers.dev/";
 
 /* Conversation history */
 let conversationHistory = [];
@@ -30,22 +31,12 @@ Guidelines:
 
 Remember: You represent a premium beauty brand. Be helpful, confident, and focused on making customers feel valued.`;
 
-/* Initialize chat with welcome message */
-function initializeChat() {
-  addMessage(
-    "ai",
-    "👋 Welcome to L'Oréal Beauty Advisor! I'm here to help you find the perfect products and beauty routines tailored just for you.\n\nWhat can I help you with today? Skincare, haircare, makeup, or something else?"
-  );
-}
-
 /* Add message to chat window */
 function addMessage(sender, text) {
   const msgDiv = document.createElement("div");
   msgDiv.classList.add("msg", sender);
   msgDiv.textContent = text;
   chatWindow.appendChild(msgDiv);
-
-  // Scroll to bottom
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
 
@@ -82,29 +73,26 @@ function setInputState(disabled) {
 
 /* Call Cloudflare Worker (which proxies to OpenAI) */
 async function callCloudflareWorker(userMessage) {
-  // Add user message to conversation history
   conversationHistory.push({
     role: "user",
     content: userMessage,
   });
 
-  // Prepare messages array with system prompt
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
     ...conversationHistory,
   ];
 
-  // Call Cloudflare Worker instead of OpenAI directly
   const response = await fetch(CLOUDFLARE_WORKER_URL, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
     },
     body: JSON.stringify({
-      model: "gpt-4o", // Changed to match Worker
+      model: "gpt-4o",
       messages: messages,
       temperature: 0.7,
-      max_tokens: 300, // Changed to match Worker's max_completion_tokens
+      max_tokens: 300,
     }),
   });
 
@@ -114,7 +102,6 @@ async function callCloudflareWorker(userMessage) {
       const errorData = await response.json();
       errorMessage = errorData.error?.message || errorMessage;
     } catch (e) {
-      // If response isn't JSON, use status text
       errorMessage = `HTTP ${response.status}: ${response.statusText}`;
     }
     throw new Error(errorMessage);
@@ -122,14 +109,12 @@ async function callCloudflareWorker(userMessage) {
 
   const data = await response.json();
 
-  // Add safety check for response structure
   if (!data.choices || !data.choices[0] || !data.choices[0].message) {
     throw new Error("Invalid response format from API");
   }
 
   const assistantMessage = data.choices[0].message.content;
 
-  // Add assistant response to conversation history
   conversationHistory.push({
     role: "assistant",
     content: assistantMessage,
@@ -138,5 +123,64 @@ async function callCloudflareWorker(userMessage) {
   return assistantMessage;
 }
 
-/* Initialize on page load */
-initializeChat();
+/* Initialize chat with welcome message */
+function initializeChat() {
+  addMessage(
+    "ai",
+    "👋 Welcome to L'Oréal Beauty Advisor! I'm here to help you find the perfect products and beauty routines tailored just for you.\n\nWhat can I help you with today? Skincare, haircare, makeup, or something else?"
+  );
+}
+
+/* Initialize everything when DOM is ready */
+document.addEventListener("DOMContentLoaded", function () {
+  // Initialize DOM elements
+  chatForm = document.getElementById("chatForm");
+  userInput = document.getElementById("userInput");
+  chatWindow = document.getElementById("chatWindow");
+  sendBtn = document.getElementById("sendBtn");
+
+  // Initialize chat
+  initializeChat();
+
+  // Handle form submit
+  chatForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
+
+    const message = userInput.value.trim();
+    if (!message) return;
+
+    // Display user message
+    addMessage("user", message);
+
+    // Clear input
+    userInput.value = "";
+
+    // Disable input while processing
+    setInputState(true);
+
+    // Show typing indicator
+    showTypingIndicator();
+
+    try {
+      // Call Cloudflare Worker
+      const response = await callCloudflareWorker(message);
+
+      // Remove typing indicator
+      removeTypingIndicator();
+
+      // Display AI response
+      addMessage("ai", response);
+    } catch (error) {
+      console.error("Error:", error);
+      removeTypingIndicator();
+      addMessage(
+        "ai",
+        "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸"
+      );
+    } finally {
+      // Re-enable input
+      setInputState(false);
+      userInput.focus();
+    }
+  });
+});
