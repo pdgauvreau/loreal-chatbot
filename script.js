@@ -5,7 +5,8 @@ const chatWindow = document.getElementById("chatWindow");
 const sendBtn = document.getElementById("sendBtn");
 
 /* Cloudflare Worker URL with your Store ID */
-const CLOUDFLARE_WORKER_URL = "https://openai.chesslablab.workers.dev/63ee090176b64641b6165540574db140";
+const CLOUDFLARE_WORKER_URL =
+  "https://wonderbot-worker.pdgauvreau.workers.dev/";
 
 /* Conversation history */
 let conversationHistory = [];
@@ -32,7 +33,10 @@ Remember: You represent a premium beauty brand. Be helpful, confident, and focus
 
 /* Initialize chat with welcome message */
 function initializeChat() {
-  addMessage("ai", "👋 Welcome to L'Oréal Beauty Advisor! I'm here to help you find the perfect products and beauty routines tailored just for you.\n\nWhat can I help you with today? Skincare, haircare, makeup, or something else?");
+  addMessage(
+    "ai",
+    "👋 Welcome to L'Oréal Beauty Advisor! I'm here to help you find the perfect products and beauty routines tailored just for you.\n\nWhat can I help you with today? Skincare, haircare, makeup, or something else?"
+  );
 }
 
 /* Add message to chat window */
@@ -41,7 +45,7 @@ function addMessage(sender, text) {
   msgDiv.classList.add("msg", sender);
   msgDiv.textContent = text;
   chatWindow.appendChild(msgDiv);
-  
+
   // Scroll to bottom
   chatWindow.scrollTop = chatWindow.scrollHeight;
 }
@@ -82,27 +86,27 @@ async function callCloudflareWorker(userMessage) {
   // Add user message to conversation history
   conversationHistory.push({
     role: "user",
-    content: userMessage
+    content: userMessage,
   });
 
   // Prepare messages array with system prompt
   const messages = [
     { role: "system", content: SYSTEM_PROMPT },
-    ...conversationHistory
+    ...conversationHistory,
   ];
 
   // Call Cloudflare Worker instead of OpenAI directly
   const response = await fetch(CLOUDFLARE_WORKER_URL, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
     },
     body: JSON.stringify({
       model: "gpt-4o-mini",
       messages: messages,
       temperature: 0.7,
-      max_tokens: 500
-    })
+      max_tokens: 500,
+    }),
   });
 
   if (!response.ok) {
@@ -116,7 +120,7 @@ async function callCloudflareWorker(userMessage) {
   // Add assistant response to conversation history
   conversationHistory.push({
     role: "assistant",
-    content: assistantMessage
+    content: assistantMessage,
   });
 
   return assistantMessage;
@@ -131,30 +135,32 @@ chatForm.addEventListener("submit", async (e) => {
 
   // Display user message
   addMessage("user", message);
-  
+
   // Clear input
   userInput.value = "";
-  
+
   // Disable input while processing
   setInputState(true);
-  
+
   // Show typing indicator
   showTypingIndicator();
 
   try {
     // Call Cloudflare Worker
     const response = await callCloudflareWorker(message);
-    
+
     // Remove typing indicator
     removeTypingIndicator();
-    
+
     // Display AI response
     addMessage("ai", response);
-    
   } catch (error) {
     console.error("Error:", error);
     removeTypingIndicator();
-    addMessage("ai", "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸");
+    addMessage(
+      "ai",
+      "I apologize, but I'm having trouble connecting right now. Please try again in a moment. 🌸"
+    );
   } finally {
     // Re-enable input
     setInputState(false);
